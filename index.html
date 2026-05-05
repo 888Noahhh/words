@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dictionary</title>
+  <style>
+    body {
+      margin: 8px;
+      background: #fff;
+      color: #000;
+      font-family: sans-serif;
+    }
+    #q { width: 100%; max-width: 40em; box-sizing: border-box; }
+    #out {
+      margin-top: 8px;
+      max-height: 70vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <p id="meta">Loading…</p>
+  <p id="fileRow" hidden>
+    <label for="jsonfile">words_dictionary.json</label>
+    <input type="file" id="jsonfile" accept=".json,application/json" />
+  </p>
+  <input type="search" id="q" placeholder="filter (prefix)" disabled autocomplete="off" />
+  <div>
+    <button type="button" id="export" disabled>Download .txt</button>
+  </div>
+  <div id="out" aria-live="polite"></div>
+  <div id="err" hidden></div>
+
+  <script>
+    const MAX_RENDER = 5000;
+    let allWords = [];
+
+    const meta = document.getElementById('meta');
+    const fileRow = document.getElementById('fileRow');
+    const jsonfile = document.getElementById('jsonfile');
+    const out = document.getElementById('out');
+    const q = document.getElementById('q');
+    const err = document.getElementById('err');
+    const exportBtn = document.getElementById('export');
+
+    function finishLoad(data) {
+      allWords = Object.keys(data).sort();
+      meta.textContent =
+        'Loaded ' +
+        allWords.length.toLocaleString() +
+        ' words. First ' +
+        MAX_RENDER.toLocaleString() +
+        ' lines in the box; Download for full list.';
+      setError('');
+      fileRow.hidden = true;
+      q.disabled = false;
+      exportBtn.disabled = false;
+      out.textContent = '';
+      update();
+    }
+
+    function setError(msg) {
+      err.hidden = !msg;
+      err.textContent = msg || '';
+    }
+
+    /** First index i where arr[i] >= s (arr sorted). */
+    function lowerBound(arr, s) {
+      let lo = 0,
+        hi = arr.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (arr[mid] < s) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    }
+
+    /** [start, end) indexes into allWords for words whose key starts with prefix (sorted keys). */
+    function prefixRange(p) {
+      if (!p) return { start: 0, end: allWords.length };
+      const start = lowerBound(allWords, p);
+      let end = start;
+      while (end < allWords.length && allWords[end].startsWith(p)) end++;
+      return { start, end };
+    }
+
+    function renderRange(start, end) {
+      const total = end - start;
+      if (total === 0) {
+        out.textContent = 'No matches.';
+        return;
+      }
+      const cap = Math.min(end, start + MAX_RENDER);
+      let text = '';
+      for (let i = start; i < cap; i++) {
+        text += allWords[i] + (i + 1 < cap ? '\n' : '');
+      }
+      out.textContent = text;
+      if (total > MAX_RENDER) {
+        const note = document.createElement('div');
+        note.textContent =
+          '… ' +
+          total.toLocaleString() +
+          ' matches; first ' +
+          MAX_RENDER.toLocaleString() +
+          ' shown. Filter or Download for full list.';
+        out.appendChild(note);
+      }
+    }
+
+    function update() {
+      const p = q.value.trim().toLowerCase();
+      const { start, end } = prefixRange(p);
+      renderRange(start, end);
+    }
+
+    q.addEventListener('input', () => {
+      update();
+      exportBtn.disabled = allWords.length === 0;
+    });
+
+    exportBtn.addEventListener('click', () => {
+      const prefix = q.value.trim().toLowerCase();
+      const { start, end } = prefixRange(prefix);
+      const slice = allWords.slice(start, end);
+      const blob = new Blob([slice.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = prefix ? `words-${prefix}.txt` : 'words-all.txt';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    jsonfile.addEventListener('change', async () => {
+      const f = jsonfile.files[0];
+      if (!f) return;
+      try {
+        finishLoad(JSON.parse(await f.text()));
+      } catch (e) {
+        setError('Bad JSON: ' + (e && e.message ? e.message : String(e)));
+      }
+    });
+
+    (async () => {
+      if (location.protocol === 'file:') {
+        meta.textContent =
+          'Opening as file:// blocks fetch(). Use Choose File picks words_dictionary.json, or run a local server (e.g. npx serve in this folder) and open http://localhost….';
+        fileRow.hidden = false;
+        setError('');
+        return;
+      }
+      try {
+        const res = await fetch('./words_dictionary.json', { cache: 'force-cache' });
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        finishLoad(await res.json());
+      } catch (e) {
+        meta.textContent = 'Fetch failed. Choose words_dictionary.json:';
+        fileRow.hidden = false;
+        setError(String(e && e.message ? e.message : e));
+      }
+    })();
+  </script>
+</body>
+</html>
