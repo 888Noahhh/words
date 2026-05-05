@@ -24,8 +24,8 @@
 <body>
   <p id="meta">Loading…</p>
   <p id="fileRow" hidden>
-    <label for="jsonfile">words_dictionary.json</label>
-    <input type="file" id="jsonfile" accept=".json,application/json" />
+    <label for="wordfile">words_dictionary.txt</label>
+    <input type="file" id="wordfile" accept=".txt,text/plain" />
   </p>
   <input type="search" id="q" placeholder="filter (prefix)" disabled autocomplete="off" />
   <div>
@@ -40,14 +40,20 @@
 
     const meta = document.getElementById('meta');
     const fileRow = document.getElementById('fileRow');
-    const jsonfile = document.getElementById('jsonfile');
+    const wordfile = document.getElementById('wordfile');
     const out = document.getElementById('out');
     const q = document.getElementById('q');
     const err = document.getElementById('err');
     const exportBtn = document.getElementById('export');
 
-    function finishLoad(data) {
-      allWords = Object.keys(data).sort();
+    function wordsFromText(raw) {
+      const a = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      a.sort();
+      return a;
+    }
+
+    function finishLoadWords(allWords_) {
+      allWords = allWords_;
       meta.textContent =
         'Loaded ' +
         allWords.length.toLocaleString() +
@@ -135,30 +141,30 @@
       URL.revokeObjectURL(a.href);
     });
 
-    jsonfile.addEventListener('change', async () => {
-      const f = jsonfile.files[0];
+    wordfile.addEventListener('change', async () => {
+      const f = wordfile.files[0];
       if (!f) return;
       try {
-        finishLoad(JSON.parse(await f.text()));
+        finishLoadWords(wordsFromText(await f.text()));
       } catch (e) {
-        setError('Bad JSON: ' + (e && e.message ? e.message : String(e)));
+        setError('Bad file: ' + (e && e.message ? e.message : String(e)));
       }
     });
 
     (async () => {
       if (location.protocol === 'file:') {
         meta.textContent =
-          'Opening as file:// blocks fetch(). Use Choose File picks words_dictionary.json, or run a local server (e.g. npx serve in this folder) and open http://localhost….';
+          'Opening as file:// blocks fetch(). Use Choose File and pick words_dictionary.txt, or run a local server (e.g. npx serve in this folder) and open http://localhost….';
         fileRow.hidden = false;
         setError('');
         return;
       }
       try {
-        const res = await fetch('./words_dictionary.json', { cache: 'force-cache' });
+        const res = await fetch('./words_dictionary.txt', { cache: 'force-cache' });
         if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
-        finishLoad(await res.json());
+        finishLoadWords(wordsFromText(await res.text()));
       } catch (e) {
-        meta.textContent = 'Fetch failed. Choose words_dictionary.json:';
+        meta.textContent = 'Fetch failed. Choose words_dictionary.txt:';
         fileRow.hidden = false;
         setError(String(e && e.message ? e.message : e));
       }
