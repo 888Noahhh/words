@@ -2,9 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
     {
-      "source": "/words_dictionary.json",
+      "source": "/words_dictionary.txt",
       "headers": [
-        { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     }
